@@ -15,15 +15,11 @@ Shortlife Clock is a Python application that calculates life expectancy based on
 
 ## Installation
 
-1. Clone the repository:
-   ```
-   git clone https://github.com/yourusername/shortlife-clock.git
-   ```
-2. Navigate to the project directory:
+1. Navigate to the project directory:
    ```
    cd shortlife-clock
    ```
-3. Install the required packages:
+2. Install the required packages:
    ```
    pip install -r requirements.txt
    ```
@@ -38,7 +34,3 @@ python src/Shortlife_Clock_3.0.py
 ## Contributing
 
 Feel free to submit issues or pull requests for improvements and bug fixes.
-
-## License
-
-This project is licensed under the MIT License.
