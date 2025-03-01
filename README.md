@@ -13,24 +13,6 @@ Shortlife Clock is a Python application that calculates life expectancy based on
 - Python 3.x
 - PyQt5
 
-## Installation
-
-1. Navigate to the project directory:
-   ```
-   cd shortlife-clock
-   ```
-2. Install the required packages:
-   ```
-   pip install -r requirements.txt
-   ```
-
-## Usage
-
-Run the application using:
-```
-python src/Shortlife_Clock_3.0.py
-```
-
 ## Contributing
 
 Feel free to submit issues or pull requests for improvements and bug fixes.
