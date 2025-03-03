@@ -1,13 +1,17 @@
-# FILE: /shortlife-clock/shortlife-clock/src/Shortlife_Clock_3.0.py
-
 import sys
-from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QLineEdit, QComboBox, 
-                             QPushButton, QVBoxLayout, QHBoxLayout, QGridLayout, 
-                             QMessageBox, QCheckBox, QTextEdit, QProgressBar, QDateEdit)
-from PyQt5.QtCore import QTimer, QDate, Qt
+from PyQt5.QtWidgets import (
+    QApplication, QWidget, QLabel, QLineEdit, QComboBox, QPushButton, QGridLayout,
+    QMessageBox, QCheckBox, QTextEdit, QProgressBar, QDateEdit, QFileDialog, QDialog,
+    QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem, QInputDialog, QToolTip
+)
+from PyQt5.QtCore import QTimer, QDate, Qt, QSettings
+from PyQt5.QtGui import QIntValidator, QIcon
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
+from random import choice
+import csv
 
-# Sample life expectancy data and health tips
+# Sample life expectancy data
 life_expectancy_data = {
     "World": {"Male": 70, "Female": 75},
     "Africa": {"Male": 64, "Female": 67},
@@ -18,7 +22,8 @@ life_expectancy_data = {
     "Australia": {"Male": 81, "Female": 85},
 }
 
-health_tips = [
+# Default health tips and motivational quotes
+default_health_tips = [
     "Drink plenty of water every day.",
     "Exercise regularly to maintain a healthy body.",
     "Eat a balanced diet rich in fruits and vegetables.",
@@ -26,25 +31,69 @@ health_tips = [
     "Avoid smoking and excessive alcohol consumption."
 ]
 
-motivational_quotes = [
+default_motivational_quotes = [
     "The best time to plant a tree was 20 years ago. The second best time is now.",
     "Your time is limited, don't waste it living someone else's life.",
     "The purpose of life is not to be happy. It is to be useful, to be honorable, to be compassionate, to have it make some difference that you have lived and lived well.",
     "Not how long, but how well you have lived is the main thing."
 ]
 
+class ManageTipsDialog(QDialog):
+    def __init__(self, tips, title, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.tips = tips
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout()
+
+        self.list_widget = QListWidget()
+        self.list_widget.addItems(self.tips)
+        layout.addWidget(self.list_widget)
+
+        button_layout = QHBoxLayout()
+        self.add_button = QPushButton("Add")
+        self.add_button.clicked.connect(self.add_tip)
+        self.remove_button = QPushButton("Remove")
+        self.remove_button.clicked.connect(self.remove_tip)
+        button_layout.addWidget(self.add_button)
+        button_layout.addWidget(self.remove_button)
+
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+
+    def add_tip(self):
+        tip, ok = QInputDialog.getText(self, "Add Tip", "Enter a new tip:")
+        if ok and tip:
+            self.list_widget.addItem(tip)
+            self.tips.append(tip)
+
+    def remove_tip(self):
+        selected = self.list_widget.currentRow()
+        if selected >= 0:
+            self.list_widget.takeItem(selected)
+            self.tips.pop(selected)
+
 class ShortlifeClock(QWidget):
     def __init__(self):
         super().__init__()
         self.dark_mode = False
         self.manual_age = False
+        self.settings = QSettings("ShortlifeClock", "Settings")
+        self.health_tips = self.settings.value("health_tips", default_health_tips)
+        self.motivational_quotes = self.settings.value("motivational_quotes", default_motivational_quotes)
         self.initUI()
+        self.load_settings()
 
     def initUI(self):
+        # Create layout
         layout = QGridLayout()
 
+        # Labels and Inputs
         self.age_label = QLabel('Age:')
         self.age_input = QLineEdit()
+        self.age_input.setValidator(QIntValidator(0, 150, self))
         self.age_input.setEnabled(False)
 
         self.birthdate_label = QLabel('Birthdate:')
@@ -74,6 +123,16 @@ class ShortlifeClock(QWidget):
 
         self.dark_mode_button = QPushButton('Toggle Dark/Light Mode')
         self.dark_mode_button.clicked.connect(self.toggle_dark_mode)
+        self.dark_mode_button.setIcon(QIcon("dark_mode_icon.png"))  # Add an icon
+
+        self.manage_health_tips_button = QPushButton('Manage Health Tips')
+        self.manage_health_tips_button.clicked.connect(self.manage_health_tips)
+
+        self.manage_quotes_button = QPushButton('Manage Motivational Quotes')
+        self.manage_quotes_button.clicked.connect(self.manage_motivational_quotes)
+
+        self.export_button = QPushButton('Export Data')
+        self.export_button.clicked.connect(self.export_data)
 
         self.result_label = QLabel('Life Percentage Used: ')
         self.days_lived_label = QLabel('Days Lived: ')
@@ -93,6 +152,7 @@ class ShortlifeClock(QWidget):
         self.countdown_timer.timeout.connect(self.update_countdown)
         self.remaining_seconds = 0
 
+        # Add widgets to layout
         layout.addWidget(self.age_label, 0, 0)
         layout.addWidget(self.age_input, 0, 1)
         layout.addWidget(self.birthdate_label, 1, 0)
@@ -106,21 +166,30 @@ class ShortlifeClock(QWidget):
         layout.addWidget(self.show_percentage_checkbox, 6, 0, 1, 2)
         layout.addWidget(self.calculate_button, 7, 0, 1, 2)
         layout.addWidget(self.dark_mode_button, 8, 0, 1, 2)
-        layout.addWidget(self.result_label, 9, 0, 1, 2)
-        layout.addWidget(self.days_lived_label, 10, 0, 1, 2)
-        layout.addWidget(self.remaining_days_label, 11, 0, 1, 2)
-        layout.addWidget(self.progress_bar, 12, 0, 1, 2)
-        layout.addWidget(self.quote_label, 13, 0, 1, 2)
-        layout.addWidget(self.quote_text, 14, 0, 1, 2)
-        layout.addWidget(self.health_tips_label, 15, 0, 1, 2)
-        layout.addWidget(self.health_tips_text, 16, 0, 1, 2)
-        layout.addWidget(self.countdown_label, 17, 0, 1, 2)
+        layout.addWidget(self.manage_health_tips_button, 9, 0, 1, 2)
+        layout.addWidget(self.manage_quotes_button, 10, 0, 1, 2)
+        layout.addWidget(self.export_button, 11, 0, 1, 2)
+        layout.addWidget(self.result_label, 12, 0, 1, 2)
+        layout.addWidget(self.days_lived_label, 13, 0, 1, 2)
+        layout.addWidget(self.remaining_days_label, 14, 0, 1, 2)
+        layout.addWidget(self.progress_bar, 15, 0, 1, 2)
+        layout.addWidget(self.quote_label, 16, 0, 1, 2)
+        layout.addWidget(self.quote_text, 17, 0, 1, 2)
+        layout.addWidget(self.health_tips_label, 18, 0, 1, 2)
+        layout.addWidget(self.health_tips_text, 19, 0, 1, 2)
+        layout.addWidget(self.countdown_label, 20, 0, 1, 2)
 
         self.setLayout(layout)
         self.setWindowTitle('Shortlife Clock')
 
+        # Timer for daily health tips
         self.health_tips_timer = QTimer(self)
         self.health_tips_timer.timeout.connect(self.show_health_tip)
+
+        # Tooltips
+        self.age_input.setToolTip("Enter your age manually or use the birthdate field.")
+        self.birthdate_input.setToolTip("Select your birthdate to calculate your age.")
+        self.dark_mode_button.setToolTip("Toggle between dark and light mode.")
 
     def toggle_age_input(self, state):
         if state == Qt.Checked:
@@ -139,7 +208,9 @@ class ShortlifeClock(QWidget):
             else:
                 birthdate = self.birthdate_input.date().toPyDate()
                 today = datetime.today().date()
-                age = (today - birthdate).days // 365
+                if birthdate > today:
+                    raise ValueError("Birthdate cannot be in the future.")
+                age = relativedelta(today, birthdate).years
 
             gender = self.gender_input.currentText()
             continent = self.continent_input.currentText()
@@ -148,27 +219,37 @@ class ShortlifeClock(QWidget):
                 raise ValueError("Age cannot be negative")
 
             life_expectancy = life_expectancy_data[continent][gender]
+            if age > life_expectancy:
+                QMessageBox.warning(self, "Input Error", "Age exceeds life expectancy for the selected region and gender.")
+                return
+
             life_percentage_used = (age / life_expectancy) * 100
 
             self.result_label.setText(f'Life Percentage Used: {life_percentage_used:.2f}%')
 
+            # Calculate days lived and remaining days
             days_lived = age * 365
             remaining_days = (life_expectancy * 365) - days_lived
             self.days_lived_label.setText(f'Days Lived: {days_lived}')
             self.remaining_days_label.setText(f'Remaining Days: {remaining_days}')
 
-            self.progress_bar.setValue(int(life_percentage_used))
+            # Update progress bar
+            self.progress_bar.setValue(min(int(life_percentage_used), 100))
 
+            # Show motivational quote
             self.show_motivational_quote()
 
-            self.remaining_seconds = remaining_days * 24 * 3600
-            self.countdown_timer.start(1000)
+            # Start countdown
+            self.countdown_timer.stop()
+            self.remaining_seconds = remaining_days * 24 * 3600  # Convert days to seconds
+            self.countdown_timer.start(1000)  # Update every second
             self.update_countdown()
 
+            # Update display for remaining days as percentage if checkbox is checked
             self.update_remaining_display()
 
-        except ValueError:
-            QMessageBox.warning(self, "Input Error", "Please enter a valid age.")
+        except ValueError as e:
+            QMessageBox.warning(self, "Input Error", str(e))
 
     def update_remaining_display(self):
         if self.show_percentage_checkbox.isChecked():
@@ -183,14 +264,13 @@ class ShortlifeClock(QWidget):
             self.remaining_days_label.setText(f'Remaining Days: {remaining_days}')
 
     def show_health_tip(self):
-        from random import choice
-        tip = choice(health_tips)
+        tip = choice(self.health_tips)
         self.health_tips_text.setText(tip)
 
     def toggle_health_tips(self, state):
         if state == Qt.Checked:
             self.show_health_tip()
-            self.health_tips_timer.start(86400000)
+            self.health_tips_timer.start(86400000)  # Update daily
         else:
             self.health_tips_text.clear()
             self.health_tips_timer.stop()
@@ -202,10 +282,10 @@ class ShortlifeClock(QWidget):
         else:
             self.setStyleSheet("background-color: #2e2e2e; color: #ffffff;")
             self.dark_mode = True
+        self.save_settings()
 
     def show_motivational_quote(self):
-        from random import choice
-        quote = choice(motivational_quotes)
+        quote = choice(self.motivational_quotes)
         self.quote_text.setText(quote)
 
     def update_countdown(self):
@@ -219,6 +299,41 @@ class ShortlifeClock(QWidget):
         else:
             self.countdown_timer.stop()
             self.countdown_label.setText('Time Remaining: Expired')
+
+    def export_data(self):
+        options = QFileDialog.Options()
+        file_name, _ = QFileDialog.getSaveFileName(self, "Export Data", "", "CSV Files (*.csv);;All Files (*)", options=options)
+        if file_name:
+            with open(file_name, 'w', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow(["Life Percentage Used", "Days Lived", "Remaining Days"])
+                writer.writerow([
+                    self.result_label.text().split(": ")[1],
+                    self.days_lived_label.text().split(": ")[1],
+                    self.remaining_days_label.text().split(": ")[1]
+                ])
+
+    def manage_health_tips(self):
+        dialog = ManageTipsDialog(self.health_tips, "Manage Health Tips", self)
+        if dialog.exec_() == QDialog.Accepted:
+            self.health_tips = dialog.tips
+            self.settings.setValue("health_tips", self.health_tips)
+
+    def manage_motivational_quotes(self):
+        dialog = ManageTipsDialog(self.motivational_quotes, "Manage Motivational Quotes", self)
+        if dialog.exec_() == QDialog.Accepted:
+            self.motivational_quotes = dialog.tips
+            self.settings.setValue("motivational_quotes", self.motivational_quotes)
+
+    def load_settings(self):
+        self.dark_mode = self.settings.value("dark_mode", False, bool)
+        if self.dark_mode:
+            self.setStyleSheet("background-color: #2e2e2e; color: #ffffff;")
+
+    def save_settings(self):
+        self.settings.setValue("dark_mode", self.dark_mode)
+        self.settings.setValue("health_tips", self.health_tips)
+        self.settings.setValue("motivational_quotes", self.motivational_quotes)
 
 def main():
     app = QApplication(sys.argv)
