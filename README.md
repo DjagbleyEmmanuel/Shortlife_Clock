@@ -77,8 +77,8 @@ Shortlife Clock is a Python application that calculates life expectancy based on
 
 ## Screenshots
 
-![Shortlife Clock Screenshot](![Shortlifeclock](https://github.com/user-attachments/assets/0b297c4d-121a-49b7-a5a6-d6f75458ef5c)
-)  
+![Shortlifeclock](https://github.com/user-attachments/assets/4f3664ba-8a4c-4714-b31e-960901738d30)
+
 *Example screenshot of the Shortlife Clock application.*
 
 ---
